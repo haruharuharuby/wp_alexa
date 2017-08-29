@@ -1,0 +1,7 @@
+[
+  "urllib3",
+  "requests",
+  "chardet",
+  "certifi",
+  "idna"
+]

@@ -1,0 +1,18 @@
+{
+	"release": {
+		"HOST": "adamasproduction.cluster-cpqehyxert5a.ap-northeast-1.rds.amazonaws.com",
+		"USER": "matsumoto",
+		"PORT": 52731,
+		"PASS": "zaqwsxzaq",
+		"NAME": "adamasproduction",
+		"CHAR": "utf8"
+  },
+	"test": {
+		"HOST": "harrytest.c3k2p6dbakms.ap-northeast-2.rds.amazonaws.com",
+		"USER": "root",
+    "PORT": 3306,
+		"PASS": "zpoi098098",
+		"NAME": "harry_test",
+		"CHAR": "utf8"
+  }
+}

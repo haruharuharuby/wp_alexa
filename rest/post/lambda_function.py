@@ -1,0 +1,164 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function
+
+import requests
+import json
+
+
+# --------------- Helpers that build all of the responses ----------------------
+
+def build_speechlet_response(title, output, reprompt_text, should_end_session):
+    return {
+        'outputSpeech': {
+            'type': 'SSML',
+            'ssml': "<speak>%s</speak>" % (output)
+        },
+        'card': {
+            'type': 'Simple',
+            'title': "Yakitori - " + title,
+            'content': "Yakitori - " + output
+        },
+        'reprompt': {
+            'outputSpeech': {
+                'type': 'SSML',
+                'text': "<speak>%s</speak>" % (output)
+            }
+        },
+        'shouldEndSession': should_end_session
+    }
+
+
+def build_response(session_attributes, speechlet_response):
+    return {
+        'version': '1.0',
+        'sessionAttributes': session_attributes,
+        'response': speechlet_response
+    }
+
+
+def call_api_and_response(url, card, session, content, is_end_session, succeeded, failed, reprompt):
+    payload = {'content': content, 'excerpt':"test"}
+    print(session)
+    headers = {'Authorization': 'Bearer ' + session['user']['accessToken']}
+    print(headers)
+    r = requests.post(url, headers=headers, data=payload)
+    print(r.text)
+
+
+    card_title = card
+    session_attributes = {}
+    should_end_session = is_end_session
+    reprompt_text = reprompt()
+
+    if r.status_code == requests.codes.ok:
+        speech_output = succeeded()
+    else:
+        speech_output = failed()
+    return build_response(session_attributes, build_speechlet_response(
+        card_title, speech_output, reprompt_text, should_end_session))
+
+
+# --------------- Functions that control the skill's behavior ------------------
+
+def get_welcome_response():
+    session_attributes = {}
+    card_title = "Welcome"
+    speech_output = "Hi. <break time=\"300ms\" /> Can I help you?"
+    # If the user either does not reply to the welcome message or says something
+    # that is not understood, they will be prompted again with this text.
+    reprompt_text = "Please tell me save the voucher, show my accounting sheet or calculate payroll"
+    should_end_session = False
+    return build_response(session_attributes, build_speechlet_response(
+        card_title, speech_output, reprompt_text, should_end_session))
+
+
+def handle_session_end_request():
+    card_title = "Session Ended"
+    speech_output = "Thank you. <break time=\"300ms\" /> Good bye."
+    # Setting this to true ends the session and exits the skill.
+    should_end_session = True
+    return build_response({}, build_speechlet_response(
+        card_title, speech_output, None, should_end_session))
+
+
+def my_shop_is_full(intent, session):
+    return call_api_and_response(
+        url='https://yakitori.tinms.net/wp-json/wp/v2/pages/7',
+        card=intent['name'],
+        session=session,
+        content="ただいま満席です。",
+        is_end_session=True,
+        succeeded= lambda: "OK, It's nice for your busy <break time=\"200ms\" /> ",
+        failed= lambda: "Sorry, <break time=\"200ms\" /> I  <break time=\"200ms\" />Please try again.",
+        reprompt= lambda: "Please tell me full"
+    )
+
+
+def my_shop_is_acceptable(intent, session):
+    return call_api_and_response(
+        url='https://yakitori.tinms.net/wp-json/wp/v2/pages/7',
+        card=intent['name'],
+        session=session,
+        content="お席空いております。",
+        is_end_session=True,
+        succeeded= lambda: "OK, I wish our sheet are full of customer.<break time=\"200ms\" />",
+        failed= lambda: "Sorry, <break time=\"200ms\" />Please try again.",
+        reprompt= lambda: "Please tell me acceptable"
+    )
+
+
+# --------------- Events ------------------
+
+def on_session_started(session_started_request, session):
+    print("on_session_started requestId=" + session_started_request['requestId']
+          + ", sessionId=" + session['sessionId'])
+
+
+def on_launch(launch_request, session):
+    print("on_launch requestId=" + launch_request['requestId'] +
+          ", sessionId=" + session['sessionId'])
+    # Dispatch to your skill's launch
+    return get_welcome_response()
+
+
+def on_intent(intent_request, session):
+    print("on_intent requestId=" + intent_request['requestId'] +
+          ", sessionId=" + session['sessionId'])
+
+    intent = intent_request['intent']
+    intent_name = intent_request['intent']['name']
+
+    # Dispatch to your skill's intent handlers
+    if intent_name == "MyShopIsFullIntent":
+        return my_shop_is_full(intent, session)
+    elif intent_name == "MyShopIsAcceptableIntent":
+        return my_shop_is_acceptable(intent, session)
+    elif intent_name == "AMAZON.CancelIntent" or intent_name == "AMAZON.StopIntent":
+        return handle_session_end_request()
+    else:
+        raise ValueError("Invalid intent")
+
+
+def on_session_ended(session_ended_request, session):
+    print("on_session_ended requestId=" + session_ended_request['requestId'] +
+          ", sessionId=" + session['sessionId'])
+    # add cleanup logic here
+
+
+# --------------- Main handler ------------------
+
+def lambda_handler(event, context):
+    print("event.session.application.applicationId=" +
+          event['session']['application']['applicationId'])
+
+    print(event)
+    if event['session']['new']:
+        on_session_started({'requestId': event['request']['requestId']},
+                           event['session'])
+
+    if event['request']['type'] == "LaunchRequest":
+        return on_launch(event['request'], event['session'])
+    elif event['request']['type'] == "IntentRequest":
+        return on_intent(event['request'], event['session'])
+    elif event['request']['type'] == "SessionEndedRequest":
+        return on_session_ended(event['request'], event['session'])
